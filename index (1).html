@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON DRIVE 3D</title>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#82c9ef;font-family:Arial,sans-serif}
+canvas{display:block}
+#hud{position:fixed;inset:0;pointer-events:none;color:white;z-index:2}
+.panel{background:linear-gradient(135deg,#101a2de8,#172a39c9);border:1px solid #ffffff35;border-radius:15px;padding:12px 16px;box-shadow:0 5px 20px #0004}
+#stats{position:absolute;top:14px;left:14px;line-height:1.9;font-size:14px}
+#brand{position:absolute;top:15px;right:15px;text-align:right;font-weight:bold;letter-spacing:2px}
+#brand strong{color:#48eaff;font-size:20px}
+#speedBox{position:absolute;bottom:20px;right:16px;text-align:center;min-width:115px}
+#speed{font-size:36px;font-weight:bold;color:#49eaff}
+#nitroBox{height:9px;background:#26394b;border-radius:9px;overflow:hidden;margin-top:8px}
+#nitroBar{height:100%;width:100%;background:linear-gradient(90deg,#00d9ff,#7b6cff)}
+#message{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:white;background:linear-gradient(#07162788,#06101de8);z-index:5;padding:22px}
+#message h1{font-size:clamp(30px,7vw,62px);margin:0;color:#51edff;text-shadow:0 0 25px #00cfff}
+#message p{max-width:430px;line-height:2}
+#start{border:0;border-radius:12px;padding:15px 35px;background:linear-gradient(100deg,#00bfe9,#5766ff);color:white;font-size:18px;font-weight:bold;cursor:pointer}
+#controls{position:fixed;bottom:18px;left:16px;display:flex;gap:12px;z-index:3}
+#controls button{width:65px;height:60px;border:1px solid #ffffff55;border-radius:15px;background:#10263bd9;color:white;font-size:25px;touch-action:none}
+#nitro{position:fixed;bottom:90px;left:25px;z-index:3;width:125px;height:42px;border:1px solid #62eaff;border-radius:12px;background:#103b59dd;color:#70f2ff;font-weight:bold;touch-action:none}
+#hint{position:fixed;bottom:100px;right:15px;color:white;font-size:11px;text-shadow:0 1px 5px black}
+@media(min-width:800px){#controls button{width:74px;height:65px}}
+</style>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#080b18">
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js")
+      .then(() => console.log("NEON DRIVE آماده شد!"))
+      .catch(error => console.error("خطای Service Worker:", error));
+  });
+}
+</script>
+</head>
+<body>
+
+<div id="hud">
+  <div id="stats" class="panel">
+    🏁 امتیاز: <b id="score">0</b><br>
+    🚘 عبور از رقبا: <b id="passed">0</b><br>
+    ⚡ وضعیت: <b id="status">آماده</b>
+  </div>
+  <div id="brand"><strong>NEON DRIVE</strong><br><small>3D HIGHWAY RUSH</small></div>
+  <div id="speedBox" class="panel">
+    <div style="font-size:11px">سرعت کیلومتر بر ساعت</div>
+    <div id="speed">000</div>
+    <div id="nitroBox"><div id="nitroBar"></div></div>
+    <small>نیترو ⚡</small>
+  </div>
+</div>
+
+<div id="hint">← → حرکت | SPACE نیترو</div>
+
+<div id="controls">
+  <button id="left">◀</button>
+  <button id="right">▶</button>
+</div>
+<button id="nitro">⚡ NITRO</button>
+
+<div id="message">
+  <h1 id="title">NEON DRIVE</h1>
+  <p id="description">آماده‌ای وارد جاده بشی؟<br>از رقبا سبقت بگیر، نیترو بزن و رکوردت رو بشکن!</p>
+  <button id="start">شروع مسابقه 🏁</button>
+  <p style="font-size:12px">کنترل: کلیدهای جهت‌دار یا A و D | نیترو: Space</p>
+</div>
+
+<script type="importmap">
+{
+  "imports":{
+    "three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+
+// تنظیمات صحنه
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x91d5f4);
+scene.fog = new THREE.Fog(0x91d5f4, 55, 155);
+
+const camera = new THREE.PerspectiveCamera(
+  65, innerWidth / innerHeight, 0.1, 260
+);
+camera.position.set(0, 5.5, 11);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+document.body.appendChild(renderer.domElement);
+
+// نورپردازی
+scene.add(new THREE.HemisphereLight(0xdaf4ff,0x526348,2.1));
+const sun = new THREE.DirectionalLight(0xfff1d5,3);
+sun.position.set(-12,22,8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024,1024);
+sun.shadow.camera.left=-15;
+sun.shadow.camera.right=15;
+sun.shadow.camera.top=20;
+sun.shadow.camera.bottom=-20;
+scene.add(sun);
+
+// ابزار ساخت اجسام
+function box(parent,w,h,d,color,x,y,z,roughness=0.8){
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshStandardMaterial({color,roughness})
+  );
+  m.position.set(x,y,z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+
+function cylinder(parent,r1,r2,h,color,x,y,z){
+  const m = new THREE.Mesh(
+    new THREE.CylinderGeometry(r1,r2,h,8),
+    new THREE.MeshStandardMaterial({color,roughness:0.9})
+  );
+  m.position.set(x,y,z);
+  m.castShadow = true;
+  parent.add(m);
+  return m;
+}
+
+// زمین و آسفالت
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(240,300),
+  new THREE.MeshStandardMaterial({color:0x527f3c,roughness:1})
+);
+ground.rotation.x=-Math.PI/2;
+ground.position.set(0,-0.12,-60);
+scene.add(ground);
+
+const road = new THREE.Mesh(
+  new THREE.PlaneGeometry(12,300),
+  new THREE.MeshStandardMaterial({color:0x30353d,roughness:0.95})
+);
+road.rotation.x=-Math.PI/2;
+road.position.set(0,0,-60);
+scene.add(road);
+
+// نوارهای رنگی کنار جاده
+const edgeParts=[];
+for(let i=0;i<50;i++){
+  const z=15-i*6;
+  for(const x of [-5.55,5.55]){
+    const stripe=box(scene,0.22,0.055,3,
+      i%2===0?0xffffff:0xe34242,x,0.045,z);
+    edgeParts.push(stripe);
+  }
+}
+
+// خطوط وسط جاده
+const dashes=[];
+for(let i=0;i<32;i++){
+  dashes.push(box(scene,0.13,0.05,2.6,0xffffff,0,0.04,12-i*4.2));
+}
+
+// کوه‌های دوردست
+for(let i=0;i<18;i++){
+  const h=8+Math.random()*13;
+  const mountain=new THREE.Mesh(
+    new THREE.ConeGeometry(7+Math.random()*6,h,5),
+    new THREE.MeshStandardMaterial({
+      color:[0x8ca8ad,0x77969d,0xa2b8b5][i%3],
+      flatShading:true,roughness:1
+    })
+  );
+  mountain.position.set(-65+i*8, h/2-1, -95-Math.random()*20);
+  mountain.scale.z=0.7;
+  scene.add(mountain);
+}
+
+// ابرهای ساده
+for(let i=0;i<13;i++){
+  const cloud=new THREE.Group();
+  for(let j=0;j<5;j++){
+    const puff=new THREE.Mesh(
+      new THREE.SphereGeometry(1+Math.random()*0.7,8,7),
+      new THREE.MeshStandardMaterial({color:0xffffff,roughness:1})
+    );
+    puff.position.set(j*1.2,Math.random()*0.5,Math.random()*0.8);
+    cloud.add(puff);
+  }
+  cloud.position.set(-55+Math.random()*110,18+Math.random()*15,-90-Math.random()*100);
+  cloud.scale.setScalar(1+Math.random()*1.5);
+  scene.add(cloud);
+}
+
+// درخت‌ها و اجسام کنار جاده
+const scenery=[];
+
+function makeTree(x,z){
+  const g=new THREE.Group();
+  cylinder(g,0.14,0.24,1.5,0x75502e,0,0.75,0);
+  for(let i=0;i<3;i++){
+    const leaves=new THREE.Mesh(
+      new THREE.ConeGeometry(1.1-i*0.18,1.9,7),
+      new THREE.MeshStandardMaterial({
+        color:[0x1d6335,0x2d7b3d,0x3b8845][Math.floor(Math.random()*3)],
+        flatShading:true,roughness:1
+      })
+    );
+    leaves.position.y=1.7+i*0.8;
+    leaves.castShadow=true;
+    g.add(leaves);
+  }
+  g.position.set(x,0,z);
+  scene.add(g);
+  scenery.push(g);
+}
+
+function makeRail(x,z){
+  const g=new THREE.Group();
+  box(g,0.16,0.26,5.5,0xb7c3cc,0,0.9,0,0.35);
+  for(const dz of [-2,0,2]){
+    box(g,0.12,0.9,0.13,0x687780,0,0.45,dz);
+  }
+  g.position.set(x,0,z);
+  scene.add(g);
+  scenery.push(g);
+}
+
+function makeLight(x,z){
+  const g=new THREE.Group();
+  cylinder(g,0.07,0.1,4.8,0x414c57,0,2.4,0);
+  box(g,0.9,0.09,0.1,0x414c57,-0.35,4.7,0);
+  box(g,0.5,0.15,0.35,0xfff0bd,-0.7,4.58,0);
+  g.position.set(x,0,z);
+  scene.add(g);
+  scenery.push(g);
+}
+
+for(let i=0;i<26;i++){
+  const z=15-i*5.7;
+  makeTree(-8-Math.random()*4,z);
+  makeTree(8+Math.random()*4,z-2.5);
+  makeRail(-6.35,z-1);
+  makeRail(6.35,z-1);
+}
+for(let i=0;i<13;i++){
+  makeLight(-7.2,10-i*11);
+  makeLight(7.2,5-i*11);
+}
+
+// ماشین بازیکن
+function makeCar(color=0xe51c36){
+  const car=new THREE.Group();
+
+  box(car,1.75,0.48,3.35,color,0,0.72,0,0.3);
+  box(car,1.48,0.23,1.6,color,0,1.02,-0.05,0.28);
+
+  const glass=new THREE.MeshStandardMaterial({
+    color:0x18394d,metalness:0.25,
+    roughness:0.2
+  });
+  box(car,1.25,0.58,1.45,0x1d3548,0,1.37,-0.12,0.25);
+
+  // شیشه جلویی و عقبی
+  box(car,1.17,0.39,0.06,0x65c7e8,0,1.39,-0.88,0.2);
+  box(car,1.13,0.35,0.06,0x244e67,0,1.39,0.63,0.25);
+
+  // سپرها
+  box(car,1.8,0.18,0.18,0x20252c,0,0.48,-1.7);
+  box(car,1.8,0.18,0.18,0x20252c,0,0.48,1.7);
+
+  // چرخ‌ها
+  const wheels=[];
+  for(const x of [-0.92,0.92]){
+    for(const z of [-1.08,1.08]){
+      const wheel=new THREE.Mesh(
+        new THREE.CylinderGeometry(0.36,0.36,0.24,16),
+        new THREE.MeshStandardMaterial({color:0x17191c,roughness:0.8})
+      );
+      wheel.rotation.z=Math.PI/2;
+      wheel.position.set(x,0.38,z);
+      wheel.castShadow=true;
+      car.add(wheel);
+      wheels.push(wheel);
+
+      const hub=new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18,0.18,0.255,12),
+        new THREE.MeshStandardMaterial({color:0xb5c7d4,metalness:0.8,roughness:0.3})
+      );
+      hub.rotation.z=Math.PI/2;
+      hub.position.copy(wheel.position);
+      car.add(hub);
+    }
+  }
+
+  // چراغ‌ها
+  for(const x of [-0.58,0.58]){
+    const head=box(car,0.34,0.15,0.07,0xfff5c7,x,0.83,-1.72,0.2);
+    head.material.emissive=new THREE.Color(0xffd87a);
+    head.material.emissiveIntensity=0.8;
+    const tail=box(car,0.35,0.14,0.07,0xff1528,x,0.79,1.72,0.2);
+    tail.material.emissive=new THREE.Color(0xff0000);
+    tail.material.emissiveIntensity=0.8;
+  }
+
+  return {group:car,wheels};
+}
+
+const player=makeCar();
+const car=player.group;
+car.position.set(0,0,4);
+scene.add(car);
+
+// ماشین‌های رقیب
+const rivals=[];
+const rivalColors=[0x1477e8,0xf3bd26,0xeeeeee,0x9228bb,0x18a783];
+
+function spawnRival(){
+  const rival=makeCar(rivalColors[Math.floor(Math.random()*rivalColors.length)]);
+  rival.group.scale.setScalar(0.94);
+  rival.group.position.set([-3.7,0,3.7][Math.floor(Math.random()*3)],0,-105);
+  scene.add(rival.group);
+  rivals.push(rival);
+}
+
+// وضعیت بازی
+const $=id=>document.getElementById(id);
+const keys={left:false,right:false,nitro:false};
+let running=false;
+let score=0;
+let passed=0;
+let speed=0.34;
+let nitroFuel=100;
+let spawnTime=0;
+let elapsed=0;
+let lastTime=0;
+let steer=0;
+
+function resetGame(){
+  for(const r of rivals) scene.remove(r.group);
+  rivals.length=0;
+
+  score=0;
+  passed=0;
+  speed=0.34;
+  nitroFuel=100;
+  spawnTime=0;
+  elapsed=0;
+  steer=0;
+  car.position.x=0;
+  car.rotation.z=0;
+  running=true;
+  keys.left=keys.right=keys.nitro=false;
+
+  $("score").textContent="0";
+  $("passed").textContent="0";
+  $("status").textContent="مسابقه";
+  $("title").textContent="NEON DRIVE";
+  $("start").textContent="شروع دوباره";
+  $("message").style.display="none";
+}
+
+$("start").addEventListener("click",resetGame);
+
+function endGame(){
+  running=false;
+  $("status").textContent="پایان";
+  $("title").textContent="🏁 مسابقه تمام شد!";
+  $("description").innerHTML=
+    "امتیاز نهایی: "+score+"<br>سبقت‌ها: "+passed+"<br>دوباره تلاش کن و رکوردت رو بشکن!";
+  $("start").textContent="تلاش دوباره";
+  $("message").style.display="flex";
+}
+
+// کنترل کیبورد
+window.addEventListener("keydown",e=>{
+  if(["ArrowLeft","ArrowRight","Space"].includes(e.code))e.preventDefault();
+  if(e.code==="ArrowLeft"||e.code==="KeyA")keys.left=true;
+  if(e.code==="ArrowRight"||e.code==="KeyD")keys.right=true;
+  if(e.code==="Space"||e.code==="ShiftLeft")keys.nitro=true;
+});
+window.addEventListener("keyup",e=>{
+  if(e.code==="ArrowLeft"||e.code==="KeyA")keys.left=false;
+  if(e.code==="ArrowRight"||e.code==="KeyD")keys.right=false;
+  if(e.code==="Space"||e.code==="ShiftLeft")keys.nitro=false;
+});
+
+// کنترل لمسی
+function bindButton(id,key){
+  const b=$(id);
+  b.addEventListener("pointerdown",e=>{
+    e.preventDefault();
+    keys[key]=true;
+    b.setPointerCapture(e.pointerId);
+  });
+  const release=()=>keys[key]=false;
+  b.addEventListener("pointerup",release);
+  b.addEventListener("pointercancel",release);
+  b.addEventListener("lostpointercapture",release);
+}
+bindButton("left","left");
+bindButton("right","right");
+bindButton("nitro","nitro");
+
+// تشخیص برخورد
+function collided(a,b){
+  return Math.abs(a.position.x-b.position.x)<1.5 &&
+         Math.abs(a
+         .position.z-b.position.z)<2.6;
+}
+
+// حلقه بازی
+function animate(time){
+  requestAnimationFrame(animate);
+  const dt=lastTime?Math.min((time-lastTime)/1000,0.04):0.016;
+  lastTime=time;
+  const frame=dt*60;
+
+  if(running){
+    elapsed+=dt;
+
+    // نیترو
+    const usingNitro=keys.nitro&&nitroFuel>0;
+    const targetSpeed=usingNitro?0.9:0.34+Math.min(score/8000,0.18);
+    speed=THREE.MathUtils.damp(speed,targetSpeed,usingNitro?3:1.5,dt);
+
+    if(usingNitro)nitroFuel=Math.max(0,nitroFuel-24*dt);
+    else nitroFuel=Math.min(100,nitroFuel+8*dt);
+
+    // حرکت و فرمان
+    const direction=(keys.right?1:0)-(keys.left?1:0);
+    car.position.x+=direction*7.5*dt;
+    car.position.x=THREE.MathUtils.clamp(car.position.x,-4.55,4.55);
+    steer=THREE.MathUtils.damp(steer,direction,8,dt);
+    car.rotation.z=-steer*0.12;
+
+    player.wheels.forEach(w=>w.rotation.x+=speed*frame*2);
+
+    // حرکت خطوط و حاشیه‌ها
+    for(const dash of dashes){
+      dash.position.z+=speed*frame*2.3;
+      if(dash.position.z>15)dash.position.z-=134.4;
+    }
+    for(const edge of edgeParts){
+      edge.position.z+=speed*frame*2.3;
+      if(edge.position.z>17)edge.position.z-=150;
+    }
+
+    // حرکت محیط
+    for(const item of scenery){
+      item.position.z+=speed*frame*2.3;
+      if(item.position.z>20)item.position.z-=148;
+    }
+
+    // ایجاد رقیب
+    spawnTime+=dt;
+    if(spawnTime>Math.max(0.8,2.1-score/2500)){
+      spawnRival();
+      spawnTime=0;
+    }
+
+    // حرکت رقبا و برخورد
+    for(let i=rivals.length-1;i>=0;i--){
+      const rival=rivals[i];
+      rival.group.position.z+=speed*frame*2.3;
+
+      rival.wheels.forEach(w=>w.rotation.x+=speed*frame*2);
+
+      if(collided(car,rival.group)){
+        endGame();
+        break;
+      }
+
+      if(rival.group.position.z>14){
+        scene.remove(rival.group);
+        rivals.splice(i,1);
+        passed++;
+        score+=100;
+        $("passed").textContent=passed;
+      }
+    }
+
+    score+=Math.floor(speed*frame*2);
+    $("score").textContent=score;
+    $("speed").textContent=String(Math.round(speed*210)).padStart(3,"0");
+    $("nitroBar").style.width=nitroFuel+"%";
+    $("status").textContent=usingNitro?"نیترو!":"در حال رانندگی";
+  }
+
+  // دوربین تعقیب‌کننده
+  camera.position.x=THREE.MathUtils.damp(camera.position.x,car.position.x*0.42,3.5,dt);
+  camera.position.y=THREE.MathUtils.damp(camera.position.y,5.3+(keys.nitro&&running?0.35:0),3,dt);
+  camera.lookAt(car.position.x*0.25,0.8,-5);
+
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+
+// تنظیم ابعاد
+window.addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
