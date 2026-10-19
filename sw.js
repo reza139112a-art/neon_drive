@@ -1,9 +1,12 @@
-const CACHE_NAME = "neon-drive-v1";
+
+const CACHE_NAME = "neon-drive-v2";
 
 const APP_FILES = [
   "./",
-  "./index.html",
-  "./manifest.json"
+  "./فهرست%20(1).html",
+  "./manifest.json",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -35,10 +38,11 @@ self.addEventListener("fetch", (event) => {
 
       return fetch(event.request).catch(() => {
         if (event.request.mode === "navigate") {
-          return caches.match("./index.html");
+          return caches.match("./فهرست%20(1).html");
         }
         throw new Error("این فایل در حالت آفلاین در دسترس نیست.");
       });
     })
   );
 });
+    
